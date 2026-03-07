@@ -69,7 +69,15 @@ const RecallsResponseSchema = z.object({
   results: z.array(RecallResultSchema),
 });
 
-export type RecallResult = z.infer<typeof RecallResultSchema>;
+export type RecallResult = {
+  NHTSACampaignNumber: string;
+  ReportReceivedDate?: string | null;
+  Component: string;
+  Summary: string;
+  Consequence: string;
+  Remedy: string;
+  Manufacturer?: string | null;
+};
 
 // ---------------------------------------------------------------------------
 // API Functions
@@ -120,7 +128,16 @@ export async function fetchRecalls(
     RecallsResponseSchema,
     `Recalls: ${year} ${make} ${model}`,
   );
-  return data.results;
+
+  return data.results.map((item) => ({
+    NHTSACampaignNumber: item.NHTSACampaignNumber,
+    ReportReceivedDate: item.ReportReceivedDate ?? null,
+    Component: item.Component ?? "UNKNOWN",
+    Summary: item.Summary ?? "",
+    Consequence: item.Consequence ?? "",
+    Remedy: item.Remedy ?? "",
+    Manufacturer: item.Manufacturer ?? null,
+  }));
 }
 
 // ---------------------------------------------------------------------------
