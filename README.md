@@ -14,6 +14,19 @@ NHTSA Recalls API ──→ VehicleYear ──→ Recall
                                    Next.js Frontend
 ```
 
+## Minimum required files
+
+Create these files before running commands:
+
+- `.env`
+  - `DATABASE_URL` (required, PostgreSQL connection string used by Prisma)
+
+You can bootstrap with:
+
+```bash
+cp .env.example .env
+```
+
 ## Quick Start
 
 ```bash
