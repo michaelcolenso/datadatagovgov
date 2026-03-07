@@ -76,7 +76,7 @@ model Recall {
   vehicleYear          VehicleYear  @relation(fields: [vehicleYearId], references: [id], onDelete: Cascade)
 
   // NHTSA identifiers
-  nhtsaCampaignNumber  String       @unique @map("nhtsa_campaign_number") // "24V123000"
+  nhtsaCampaignNumber  String       @map("nhtsa_campaign_number") // "24V123000"
   reportReceivedDate   DateTime?    @map("report_received_date")
   component            String                                              // "AIR BAGS"
   manufacturer         String?                                             // "Ford Motor Company"
@@ -99,6 +99,7 @@ model Recall {
   updatedAt            DateTime     @updatedAt @map("updated_at")
 
   @@index([vehicleYearId])
+  @@unique([vehicleYearId, nhtsaCampaignNumber])
   @@index([nhtsaCampaignNumber])
   @@index([component])
   @@index([severityLevel])

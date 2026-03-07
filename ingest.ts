@@ -186,10 +186,14 @@ async function ingestRecallsForModel(
 
       for (const recall of recalls) {
         const severity = classifySeverity(recall.Component);
+        const nhtsaCampaignNumber = recall.NHTSACampaignNumber;
 
         await prisma.recall.upsert({
           where: {
-            nhtsaCampaignNumber: recall.NHTSACampaignNumber,
+            vehicleYearId_nhtsaCampaignNumber: {
+              vehicleYearId: vehicleYear.id,
+              nhtsaCampaignNumber,
+            },
           },
           update: {
             component: recall.Component,
@@ -197,11 +201,12 @@ async function ingestRecallsForModel(
             consequenceRaw: recall.Consequence,
             remedyRaw: recall.Remedy,
             manufacturer: recall.Manufacturer ?? null,
+            reportReceivedDate: parseNhtsaDate(recall.ReportReceivedDate),
             severityLevel: severity as SeverityLevel,
           },
           create: {
             vehicleYearId: vehicleYear.id,
-            nhtsaCampaignNumber: recall.NHTSACampaignNumber,
+            nhtsaCampaignNumber,
             reportReceivedDate: parseNhtsaDate(recall.ReportReceivedDate),
             component: recall.Component,
             summaryRaw: recall.Summary,
