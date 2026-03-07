@@ -1,0 +1,136 @@
+// ============================================================================
+// RECALL ENGINE — Prisma Schema (Phase 1)
+// ============================================================================
+// Hierarchical structure: Make → Model → VehicleYear → Recall
+// Designed for programmatic SEO with slug-based routing.
+// ============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// MAKE — Top-level manufacturer (Ford, Toyota, etc.)
+// ---------------------------------------------------------------------------
+model Make {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique                        // "Ford"
+  slug      String   @unique                        // "ford"
+  nhtsaId   Int?     @unique @map("nhtsa_id")       // NHTSA MakeId for API joins
+  models    Model[]
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([slug])
+  @@map("makes")
+}
+
+// ---------------------------------------------------------------------------
+// MODEL — Vehicle model tied to a make (F-150, Camry, etc.)
+// ---------------------------------------------------------------------------
+model Model {
+  id           Int           @id @default(autoincrement())
+  makeId       Int           @map("make_id")
+  make         Make          @relation(fields: [makeId], references: [id], onDelete: Cascade)
+  name         String                                // "F-150"
+  slug         String                                // "f-150"
+  vehicleYears VehicleYear[]
+  createdAt    DateTime      @default(now()) @map("created_at")
+  updatedAt    DateTime      @updatedAt @map("updated_at")
+
+  @@unique([makeId, slug])
+  @@index([makeId])
+  @@index([slug])
+  @@map("models")
+}
+
+// ---------------------------------------------------------------------------
+// VEHICLE YEAR — A specific model year (Ford F-150 2018)
+// ---------------------------------------------------------------------------
+model VehicleYear {
+  id        Int      @id @default(autoincrement())
+  modelId   Int      @map("model_id")
+  model     Model    @relation(fields: [modelId], references: [id], onDelete: Cascade)
+  year      Int                                       // 2018
+  recalls   Recall[]
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([modelId, year])
+  @@index([modelId])
+  @@index([year])
+  @@map("vehicle_years")
+}
+
+// ---------------------------------------------------------------------------
+// RECALL — Individual recall campaign for a vehicle year
+// ---------------------------------------------------------------------------
+model Recall {
+  id                   Int          @id @default(autoincrement())
+  vehicleYearId        Int          @map("vehicle_year_id")
+  vehicleYear          VehicleYear  @relation(fields: [vehicleYearId], references: [id], onDelete: Cascade)
+
+  // NHTSA identifiers
+  nhtsaCampaignNumber  String       @unique @map("nhtsa_campaign_number") // "24V123000"
+  reportReceivedDate   DateTime?    @map("report_received_date")
+  component            String                                              // "AIR BAGS"
+  manufacturer         String?                                             // "Ford Motor Company"
+
+  // Raw text from NHTSA (verbatim government language)
+  summaryRaw           String       @map("summary_raw") @db.Text
+  consequenceRaw       String       @map("consequence_raw") @db.Text
+  remedyRaw            String       @map("remedy_raw") @db.Text
+
+  // LLM-enriched text (human-readable, Phase 3)
+  summaryEnriched      String?      @map("summary_enriched") @db.Text
+  consequenceEnriched  String?      @map("consequence_enriched") @db.Text
+  remedyEnriched       String?      @map("remedy_enriched") @db.Text
+  enrichedAt           DateTime?    @map("enriched_at")
+
+  // Derived severity for UI badges (populated during enrichment)
+  severityLevel        SeverityLevel? @default(UNKNOWN) @map("severity_level")
+
+  createdAt            DateTime     @default(now()) @map("created_at")
+  updatedAt            DateTime     @updatedAt @map("updated_at")
+
+  @@index([vehicleYearId])
+  @@index([nhtsaCampaignNumber])
+  @@index([component])
+  @@index([severityLevel])
+  @@map("recalls")
+}
+
+// ---------------------------------------------------------------------------
+// ENUMS
+// ---------------------------------------------------------------------------
+enum SeverityLevel {
+  CRITICAL  // Engine, Brakes, Steering, Fuel System
+  HIGH      // Air Bags, Seat Belts, Suspension
+  MEDIUM    // Electrical, Lighting, Visibility
+  LOW       // Accessories, Labels, Cosmetic
+  UNKNOWN
+}
+
+// ---------------------------------------------------------------------------
+// INGESTION LOG — Track pipeline runs for idempotency & debugging
+// ---------------------------------------------------------------------------
+model IngestionLog {
+  id           Int      @id @default(autoincrement())
+  runType      String   @map("run_type")              // "makes" | "models" | "recalls"
+  targetMake   String?  @map("target_make")
+  targetModel  String?  @map("target_model")
+  status       String                                  // "started" | "completed" | "failed"
+  recordsFound Int      @default(0) @map("records_found")
+  recordsSaved Int      @default(0) @map("records_saved")
+  errorMessage String?  @map("error_message") @db.Text
+  startedAt    DateTime @default(now()) @map("started_at")
+  completedAt  DateTime? @map("completed_at")
+
+  @@index([runType, status])
+  @@map("ingestion_logs")
+}
