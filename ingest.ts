@@ -34,6 +34,31 @@ const prisma = new PrismaClient();
 // ---------------------------------------------------------------------------
 function parseArgs() {
   const args = process.argv.slice(2);
+  const currentYear = new Date().getFullYear();
+  const minYear = 1980;
+  const maxYear = currentYear + 1;
+
+  const printUsageAndExit = (message: string): never => {
+    console.error(`Error: ${message}`);
+    console.error(
+      "Usage: npx tsx ingest.ts [--make <name>] [--year-start <year>] [--year-end <year>] [--limit <n>] [--makes-only] [--recalls] [--all-makes] [--dry-run]",
+    );
+    process.exit(1);
+  };
+
+  const parseIntegerFlag = (flag: string, value: string | undefined): number => {
+    if (!value) {
+      printUsageAndExit(`Missing value for ${flag}`);
+    }
+
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed) || !Number.isInteger(parsed)) {
+      printUsageAndExit(`${flag} must be an integer`);
+    }
+
+    return parsed;
+  };
+
   const flags = {
     makesOnly: args.includes("--makes-only"),
     recallsOnly: args.includes("--recalls"),
@@ -47,9 +72,34 @@ function parseArgs() {
 
   for (let i = 0; i < args.length; i++) {
     if (args[i] === "--make" && args[i + 1]) flags.targetMake = args[i + 1];
-    if (args[i] === "--year-start" && args[i + 1]) flags.yearStart = parseInt(args[i + 1]);
-    if (args[i] === "--year-end" && args[i + 1]) flags.yearEnd = parseInt(args[i + 1]);
-    if (args[i] === "--limit" && args[i + 1]) flags.limit = parseInt(args[i + 1]);
+    if (args[i] === "--year-start") {
+      flags.yearStart = parseIntegerFlag("--year-start", args[i + 1]);
+    }
+    if (args[i] === "--year-end") {
+      flags.yearEnd = parseIntegerFlag("--year-end", args[i + 1]);
+    }
+    if (args[i] === "--limit") {
+      flags.limit = parseIntegerFlag("--limit", args[i + 1]);
+    }
+  }
+
+  if (!Number.isFinite(flags.yearStart) || flags.yearStart < minYear || flags.yearStart > maxYear) {
+    printUsageAndExit(`--year-start must be between ${minYear} and ${maxYear}`);
+  }
+
+  if (!Number.isFinite(flags.yearEnd) || flags.yearEnd < minYear || flags.yearEnd > maxYear) {
+    printUsageAndExit(`--year-end must be between ${minYear} and ${maxYear}`);
+  }
+
+  if (flags.yearStart > flags.yearEnd) {
+    printUsageAndExit("--year-start must be less than or equal to --year-end");
+  }
+
+  if (
+    flags.limit !== null &&
+    (!Number.isFinite(flags.limit) || !Number.isInteger(flags.limit) || flags.limit <= 0)
+  ) {
+    printUsageAndExit("--limit must be a positive integer");
   }
 
   return flags;
