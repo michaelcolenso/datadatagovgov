@@ -32,14 +32,36 @@ const prisma = new PrismaClient();
 // ---------------------------------------------------------------------------
 // CLI argument parsing (lightweight, no deps)
 // ---------------------------------------------------------------------------
+function printUsageAndExit(message: string): never {
+  console.error(`
+❌ ${message}
+`);
+  console.error("Usage:");
+  console.error("  npx tsx src/scripts/ingest.ts [--makes-only] [--recalls] [--make <name>]");
+  console.error("                                [--year-start <yyyy>] [--year-end <yyyy>]");
+  console.error("                                [--all-makes] [--dry-run] [--limit <n>]");
+  console.error("");
+  process.exit(1);
+  throw new Error("Unreachable");
+}
+
+function parseIntegerFlag(flag: string, value: string): number {
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed)) {
+    printUsageAndExit(`Invalid ${flag} value: ${value}`);
+  }
+  return parsed;
+}
+
 function parseArgs() {
   const args = process.argv.slice(2);
+  const currentYear = new Date().getFullYear();
   const flags = {
     makesOnly: args.includes("--makes-only"),
     recallsOnly: args.includes("--recalls"),
     targetMake: null as string | null,
     yearStart: 2015,
-    yearEnd: new Date().getFullYear(),
+    yearEnd: currentYear,
     allMakes: args.includes("--all-makes"), // include non-popular
     dryRun: args.includes("--dry-run"),
     limit: null as number | null, // max makes to process
@@ -47,9 +69,31 @@ function parseArgs() {
 
   for (let i = 0; i < args.length; i++) {
     if (args[i] === "--make" && args[i + 1]) flags.targetMake = args[i + 1];
-    if (args[i] === "--year-start" && args[i + 1]) flags.yearStart = parseInt(args[i + 1]);
-    if (args[i] === "--year-end" && args[i + 1]) flags.yearEnd = parseInt(args[i + 1]);
-    if (args[i] === "--limit" && args[i + 1]) flags.limit = parseInt(args[i + 1]);
+    if (args[i] === "--year-start" && args[i + 1]) {
+      flags.yearStart = parseIntegerFlag("--year-start", args[i + 1]);
+    }
+    if (args[i] === "--year-end" && args[i + 1]) {
+      flags.yearEnd = parseIntegerFlag("--year-end", args[i + 1]);
+    }
+    if (args[i] === "--limit" && args[i + 1]) {
+      flags.limit = parseIntegerFlag("--limit", args[i + 1]);
+    }
+  }
+
+  if (flags.yearStart < 1980 || flags.yearStart > currentYear + 1) {
+    printUsageAndExit(`--year-start must be between 1980 and ${currentYear + 1}`);
+  }
+
+  if (flags.yearEnd < 1980 || flags.yearEnd > currentYear + 1) {
+    printUsageAndExit(`--year-end must be between 1980 and ${currentYear + 1}`);
+  }
+
+  if (flags.yearStart > flags.yearEnd) {
+    printUsageAndExit("--year-start cannot be greater than --year-end");
+  }
+
+  if (flags.limit !== null && flags.limit <= 0) {
+    printUsageAndExit("--limit must be greater than 0");
   }
 
   return flags;
@@ -189,7 +233,10 @@ async function ingestRecallsForModel(
 
         await prisma.recall.upsert({
           where: {
-            nhtsaCampaignNumber: recall.NHTSACampaignNumber,
+            vehicleYearId_nhtsaCampaignNumber: {
+              vehicleYearId: vehicleYear.id,
+              nhtsaCampaignNumber: recall.NHTSACampaignNumber,
+            },
           },
           update: {
             component: recall.Component,
